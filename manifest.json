@@ -1,0 +1,15 @@
+{
+  "fileLocations": [
+    {
+      "URIPrefixes": [
+        "s3://BUCKET_NAME/sample-data/"
+      ]
+    }
+  ],
+  "globalUploadSettings": {
+    "format": "CSV",
+    "delimiter": ",",
+    "textqualifier": "'",
+    "containsHeader": "true"
+  }
+} 
