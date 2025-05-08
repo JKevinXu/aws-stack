@@ -137,6 +137,31 @@ The CDK stack automatically creates a QuickSight Admin group in IAM Identity Cen
 
 This group has been pre-created with the name "QuickSight-Admins" and is ready to be used for QuickSight administration purposes.
 
+### Default QuickSight Admin User
+
+The CDK stack also automatically creates a default QuickSight admin user and adds them to the QuickSight Admins group:
+
+1. The user is created with the following attributes:
+   - Username: `xkevinj`
+   - Display name: `Kevin X`
+   - Email: `xkevinj@gmail.com`
+
+2. The user is automatically added to the "QuickSight-Admins" group
+
+3. Important deployment outputs include:
+   - `QuickSightAdminUserId`: The ID of the created admin user
+   - `UserGroupMembershipId`: The ID of the group membership link
+
+4. To set a password for this user:
+   - Go to the AWS IAM Identity Center console
+   - Navigate to "Users" and find the "Kevin X" user
+   - Select the user and choose "Reset password"
+   - Follow the prompts to set a password and complete the process
+
+5. The user can then log in to QuickSight using their Identity Center credentials
+
+**Important:** For production environments, you should modify the user email address in the CDK code to use a valid email before deploying.
+
 ## Useful CDK Commands
 
 * `npm run build`

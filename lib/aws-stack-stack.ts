@@ -61,6 +61,60 @@ export class AwsStackStack extends cdk.Stack {
     // Ensure the group creation depends on the identity center instance
     quickSightAdminGroup.node.addDependency(identityCenterInstance);
 
+    // Create a QuickSight Admin User
+    const quickSightAdminUser = new cr.AwsCustomResource(this, 'QuickSightAdminUser', {
+      onUpdate: {
+        service: 'IdentityStore',
+        action: 'createUser',
+        parameters: {
+          IdentityStoreId: identityCenterInstance.attrIdentityStoreId,
+          UserName: 'xkevinj',
+          Name: {
+            GivenName: 'Kevin',
+            FamilyName: 'Xu'
+          },
+          DisplayName: 'Kevin Xu',
+          Emails: [
+            {
+              Value: 'xkevinj@gmail.com',
+              Type: 'Work',
+              Primary: true
+            }
+          ]
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('UserId')
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+      })
+    });
+
+    // Ensure the user creation depends on the identity center instance
+    quickSightAdminUser.node.addDependency(identityCenterInstance);
+
+    // Add the user to the QuickSight Admin Group
+    const userGroupMembership = new cr.AwsCustomResource(this, 'UserGroupMembership', {
+      onUpdate: {
+        service: 'IdentityStore',
+        action: 'createGroupMembership',
+        parameters: {
+          IdentityStoreId: identityCenterInstance.attrIdentityStoreId,
+          GroupId: quickSightAdminGroup.getResponseField('GroupId'),
+          MemberId: {
+            UserId: quickSightAdminUser.getResponseField('UserId')
+          }
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('MembershipId')
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+      })
+    });
+
+    // Ensure proper dependencies
+    userGroupMembership.node.addDependency(quickSightAdminGroup);
+    userGroupMembership.node.addDependency(quickSightAdminUser);
+
     // Add S3 bucket for QuickSight data source
     const quicksightBucket = new s3.Bucket(this, 'QuickSightDataBucket', {
       versioned: true,
@@ -100,6 +154,18 @@ export class AwsStackStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'QuickSightAdminGroupId', {
       value: quickSightAdminGroup.getResponseField('GroupId'),
       description: 'The ID of the QuickSight Admin Group in IAM Identity Center'
+    });
+
+    // Output the QuickSight Admin User ID
+    new cdk.CfnOutput(this, 'QuickSightAdminUserId', {
+      value: quickSightAdminUser.getResponseField('UserId'),
+      description: 'The ID of the QuickSight Admin User in IAM Identity Center'
+    });
+
+    // Output the QuickSight Admin User Group Membership ID
+    new cdk.CfnOutput(this, 'UserGroupMembershipId', {
+      value: userGroupMembership.getResponseField('MembershipId'),
+      description: 'The ID of the membership between the user and the admin group'
     });
   }
 }
