@@ -167,5 +167,96 @@ export class AwsStackStack extends cdk.Stack {
       value: userGroupMembership.getResponseField('MembershipId'),
       description: 'The ID of the membership between the user and the admin group'
     });
+
+    // Create an Amazon Q Business instance connected to the IAM Identity Center
+    const amazonQServiceRole = new iam.Role(this, 'AmazonQServiceRole', {
+      assumedBy: new iam.ServicePrincipal('qbusiness.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonQFullAccess')
+      ]
+    });
+
+    // Create an IAM policy allowing Q Business to use IAM Identity Center
+    const qBusinessIdentityCenterPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'sso:DescribeInstance',
+        'sso:GetSharedSsoConfiguration',
+        'sso:ListInstances',
+        'sso:ListApplications', 
+        'sso:DescribeRegisteredRegions',
+        'sso:CreateApplication',
+        'sso:PutApplicationAuthenticationMethod',
+        'sso:PutApplicationAccessScope',
+        'sso:PutApplicationGrant',
+        'sso:DeleteApplication',
+        'sso:PutApplicationAssignmentConfiguration',
+        'sso-directory:DescribeUsers',
+        'sso-directory:SearchUsers',
+        'sso-directory:DescribeGroups',
+        'sso-directory:SearchGroups'
+      ],
+      resources: ['*']
+    });
+
+    amazonQServiceRole.addToPolicy(qBusinessIdentityCenterPolicy);
+
+    // Add user subscription permissions
+    const qBusinessSubscriptionPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'qbusiness:UpdateSubscription',
+        'qbusiness:CreateSubscription',
+        'qbusiness:CancelSubscription',
+        'qbusiness:ListSubscriptions',
+        'user-subscriptions:UpdateClaim',
+        'user-subscriptions:CreateClaim',
+        'organizations:DescribeOrganization',
+        'iam:CreateServiceLinkedRole'
+      ],
+      resources: ['*']
+    });
+
+    amazonQServiceRole.addToPolicy(qBusinessSubscriptionPolicy);
+
+    // Create Amazon Q Business application with direct API call
+    const amazonQBusinessCrossRegionIntegration = new cr.AwsCustomResource(this, 'AmazonQBusinessInstanceCrossRegion', {
+      onUpdate: {
+        service: 'QBusiness',
+        action: 'createApplication',
+        parameters: {
+          displayName: 'MyAmazonQBusinessCrossRegion',
+          description: 'Amazon Q Business instance for the organization with cross-region IAM IdC integration',
+          identityCenterInstanceArn: identityCenterInstance.attrInstanceArn,
+          identityType: 'AWS_IAM_IDC',
+          identityCenterType: 'ORGANIZATION',
+          roleArn: amazonQServiceRole.roleArn
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('applicationId')
+      },
+      policy: cr.AwsCustomResourcePolicy.fromStatements([
+        new iam.PolicyStatement({
+          actions: [
+            'qbusiness:CreateApplication',
+            'qbusiness:DeleteApplication', 
+            'qbusiness:GetApplication'
+          ],
+          resources: ['*']
+        }),
+        new iam.PolicyStatement({
+          actions: ['iam:PassRole'],
+          resources: [amazonQServiceRole.roleArn]
+        })
+      ])
+    });
+
+    // Ensure the Amazon Q Business instance depends on the identity center instance
+    amazonQBusinessCrossRegionIntegration.node.addDependency(identityCenterInstance);
+
+    // Output the Amazon Q Business application ID
+    new cdk.CfnOutput(this, 'AmazonQBusinessApplicationId', {
+      value: amazonQBusinessCrossRegionIntegration.getResponseField('applicationId'),
+      description: 'The ID of the Amazon Q Business application'
+    });
   }
 }
