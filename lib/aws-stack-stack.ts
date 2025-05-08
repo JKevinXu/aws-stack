@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sso from 'aws-cdk-lib/aws-sso';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cr from 'aws-cdk-lib/custom-resources';
 
 export class AwsStackStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -39,6 +40,27 @@ export class AwsStackStack extends cdk.Stack {
       ]
     });
 
+    // Create a QuickSight Admin Group in IAM Identity Center
+    // This uses a Custom Resource since CfnGroup requires the IdentityStoreId which is only available after the instance is created
+    const quickSightAdminGroup = new cr.AwsCustomResource(this, 'QuickSightAdminGroup', {
+      onUpdate: {
+        service: 'IdentityStore',
+        action: 'createGroup',
+        parameters: {
+          IdentityStoreId: identityCenterInstance.attrIdentityStoreId,
+          DisplayName: 'QuickSight-Admins',
+          Description: 'Administrators for Amazon QuickSight'
+        },
+        physicalResourceId: cr.PhysicalResourceId.fromResponse('GroupId')
+      },
+      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE
+      })
+    });
+
+    // Ensure the group creation depends on the identity center instance
+    quickSightAdminGroup.node.addDependency(identityCenterInstance);
+
     // Add S3 bucket for QuickSight data source
     const quicksightBucket = new s3.Bucket(this, 'QuickSightDataBucket', {
       versioned: true,
@@ -72,6 +94,12 @@ export class AwsStackStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'IdentityStoreId', {
       value: identityCenterInstance.attrIdentityStoreId,
       description: 'The ID of the IAM Identity Store'
+    });
+
+    // Output the QuickSight Admin Group ID
+    new cdk.CfnOutput(this, 'QuickSightAdminGroupId', {
+      value: quickSightAdminGroup.getResponseField('GroupId'),
+      description: 'The ID of the QuickSight Admin Group in IAM Identity Center'
     });
   }
 }
