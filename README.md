@@ -160,7 +160,41 @@ The CDK stack also automatically creates a default QuickSight admin user and add
 
 5. The user can then log in to QuickSight using their Identity Center credentials
 
-**Important:** For production environments, you should modify the user email address in the CDK code to use a valid email before deploying.
+## QuickSight Subscription Costs
+
+When subscribing to QuickSight Enterprise Edition with Amazon Q integration, the following costs apply:
+
+### User License Costs
+- **Author**: $24/user/month (or $18/user/month with annual commitment)
+- **Author Pro** (with Amazon Q): $50/user/month
+- **Reader**: $3/user/month
+- **Reader Pro** (with Amazon Q): $20/user/month
+
+### Amazon Q Enablement Fee
+- $250/month per account when at least one Pro user exists or there's at least one Amazon Q Topic
+
+### Benefits of Pro Licenses
+- **Author Pro** includes:
+  - All standard Author capabilities
+  - Build dashboards with natural language
+  - Create Amazon Q Topics
+  - View executive dashboard summaries
+  - Build and share generative data stories
+  - Advanced analysis with scenarios capability
+  - Entitlement to Amazon Q Business Pro
+
+- **Reader Pro** includes:
+  - All standard Reader capabilities
+  - View executive dashboard summaries
+  - Build and share generative data stories
+  - Advanced analysis with scenarios capability
+  - Entitlement to Amazon Q Business Pro
+
+### Additional Costs
+- **SPICE Storage**: $0.38/GB/month (10GB included with each Author license)
+- **Pixel-perfect reports**: Starting at $500/month for 500 report units
+
+For the most current pricing information, refer to the [official AWS QuickSight pricing page](https://aws.amazon.com/quicksight/pricing/).
 
 ## Useful CDK Commands
 

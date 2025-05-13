@@ -55,6 +55,44 @@ This document provides step-by-step instructions for setting up Amazon QuickSigh
    - Select "Share dashboard"
    - Add IAM Identity Center groups to provide access
 
+## Step 6: QuickSight Subscription Costs with Amazon Q
+
+When setting up Amazon QuickSight with Amazon Q integration, consider the following pricing structure:
+
+### User License Costs
+- **Author**: $24/user/month (or $18/user/month with annual commitment)
+- **Author Pro** (with full Amazon Q capabilities): $50/user/month
+- **Reader**: $3/user/month
+- **Reader Pro** (with Amazon Q capabilities): $20/user/month
+
+### Amazon Q Enablement Fee
+- $250/month per QuickSight account when any of the following apply:
+  - At least one Pro user exists
+  - At least one Amazon Q Topic is created
+
+### Pro License Features
+#### Author Pro includes:
+- Building dashboards using natural language
+- Creating Amazon Q Topics
+- Viewing executive dashboard summaries
+- Building and sharing generative data stories
+- Advanced analysis with scenario capabilities
+- Entitlement to Amazon Q Business Pro
+
+#### Reader Pro includes:
+- Viewing executive dashboard summaries
+- Building and sharing generative data stories
+- Advanced analysis with scenario capabilities
+- Entitlement to Amazon Q Business Pro
+
+### Considerations when Enabling Amazon Q for QuickSight
+1. **Cost Management**: Start with a small number of Pro licenses for key personnel
+2. **User Assignment**: Regular users can start with standard Reader licenses ($3/month)
+3. **Consolidated Billing**: When provisioned in AWS IAM Identity Center, Pro licenses offer consolidated billing across multiple AWS accounts
+4. **Free Trial**: Amazon Q in QuickSight offers a 30-day free trial for up to 4 users per QuickSight account
+
+For the most up-to-date pricing information, always refer to the [official AWS QuickSight pricing page](https://aws.amazon.com/quicksight/pricing/).
+
 ## Notes
 
 - Users will sign in to QuickSight through their IAM Identity Center portal
