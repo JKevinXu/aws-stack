@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { AwsStackStack } from '../lib/aws-stack-stack';
+import { ApiGatewayMcpStack } from '../lib/api-gateway-mcp-stack';
 
 const app = new cdk.App();
 new AwsStackStack(app, 'AwsStackStack', {
@@ -17,4 +18,10 @@ new AwsStackStack(app, 'AwsStackStack', {
   // env: { account: '123456789012', region: 'us-east-1' },
 
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+});
+
+// Create API Gateway MCP Stack
+new ApiGatewayMcpStack(app, 'ApiGatewayMcpStack', {
+  /* Use the same environment configuration as the main stack */
+  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
 });
