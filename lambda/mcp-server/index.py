@@ -17,13 +17,13 @@ def lambda_handler(event, context):
         
         if method == 'initialize':
             result = {
-                "protocolVersion": "1.0.0",
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {}
+                },
                 "serverInfo": {
                     "name": "simple-mcp-server",
-                    "version": "1.0.0",
-                    "capabilities": {
-                        "tools": True
-                    }
+                    "version": "1.0.0"
                 }
             }
         elif method == 'tools/list':

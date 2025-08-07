@@ -30,13 +30,13 @@ Response:
 {
   "jsonrpc": "2.0",
   "result": {
-    "protocolVersion": "1.0.0",
+    "protocolVersion": "2024-11-05",
+    "capabilities": {
+      "tools": {}
+    },
     "serverInfo": {
       "name": "simple-mcp-server",
-      "version": "1.0.0",
-      "capabilities": {
-        "tools": true
-      }
+      "version": "1.0.0"
     }
   },
   "id": 1
@@ -140,3 +140,48 @@ All MCP protocol methods have been tested and verified:
 - ✅ Initialize handshake
 - ✅ Tools listing
 - ✅ Tool execution (add operation)
+
+## MCP Inspector Integration
+
+The server has been tested with the MCP Inspector tool. During integration, several fixes were required:
+
+### Issues Encountered and Fixes
+
+1. **Capabilities Structure Error**
+   - **Error**: `ZodError: Required field "capabilities" missing`
+   - **Root Cause**: The `capabilities` field was nested inside `serverInfo` instead of at the top level
+   - **Fix**: Moved `capabilities` to the top level of the initialize response:
+   ```python
+   result = {
+       "protocolVersion": "2024-11-05",
+       "capabilities": {
+           "tools": {}
+       },
+       "serverInfo": {
+           "name": "simple-mcp-server",
+           "version": "1.0.0"
+       }
+   }
+   ```
+
+2. **Protocol Version Incompatibility**
+   - **Error**: `Server's protocol version is not supported: 1.0.0`
+   - **Root Cause**: Used incorrect protocol version `1.0.0` instead of the expected MCP version
+   - **Fix**: Updated protocol version to `2024-11-05`
+
+### Testing with MCP Inspector
+
+To test with MCP Inspector:
+
+```bash
+# Start MCP Inspector (disable auth to avoid proxy issues)
+DANGEROUSLY_OMIT_AUTH=true npx @modelcontextprotocol/inspector
+
+# Access the web interface at http://localhost:6274
+# The inspector will auto-detect the server endpoint
+```
+
+The inspector successfully connects and displays:
+- Server capabilities and info
+- Available tools (add function)
+- Interactive tool testing interface
