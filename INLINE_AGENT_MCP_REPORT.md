@@ -152,6 +152,57 @@ async def make_request(self, method: str, params: Dict[str, Any] = None):
 | Tool Execution | ~2-3 seconds | 100% |
 | Complete Query | ~3-5 seconds | 100% |
 
+## Inline vs Traditional Bedrock Agents
+
+### Key Architectural Difference
+
+**Inline Agents** (This Implementation):
+- ✅ **No CDK Required**: Agent defined dynamically in runtime code
+- ✅ **No AWS Resources**: No persistent agent entities in AWS control plane
+- ✅ **Dynamic Configuration**: Can modify agent behavior at runtime
+- ✅ **Faster Development**: No infrastructure deployment needed
+- ✅ **Code-based**: Everything version-controlled in application
+
+**Traditional Bedrock Agents** (CDK-based):
+- 🏗️ **Infrastructure Required**: `AWS::Bedrock::Agent` resources via CDK
+- 🏗️ **Pre-configured**: Agent definition stored in AWS control plane  
+- 🏗️ **Static**: Requires redeployment to change configuration
+- 🏗️ **Enterprise Ready**: Shared agents, governance, resource limits
+
+### Implementation Comparison
+
+**CDK Agent Definition** (bedrock-agent-stack.ts):
+```typescript
+const mcpTestAgent = new bedrock.CfnAgent(this, 'McpTestAgent', {
+  agentName: 'mcp-test-agent',
+  agentResourceRoleArn: agentRole.roleArn,
+  foundationModel: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+  instruction: "You are an MCP server testing assistant...",
+  actionGroups: [...]
+});
+```
+
+**Inline Agent Definition** (This implementation):
+```python
+agent = InlineAgent(
+    foundation_model="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    instruction="You are a helpful assistant...",
+    agent_name="MathAgent",
+    action_groups=[action_group]
+)
+```
+
+### When to Use Each Approach
+
+| Use Case | Inline Agents | CDK Agents |
+|----------|---------------|------------|
+| **Prototyping** | ✅ Recommended | ❌ Overhead |
+| **Development/Testing** | ✅ Fast iteration | ❌ Slow deployment |
+| **Application-specific** | ✅ Embedded logic | ❌ Over-engineering |
+| **Production/Enterprise** | ⚠️ Consider governance | ✅ Recommended |
+| **Shared/Multi-team** | ❌ Code coupling | ✅ Centralized |
+| **Compliance/Audit** | ⚠️ Code-based tracking | ✅ AWS resource logs |
+
 ## Deployment Configuration
 
 ### Environment Setup
