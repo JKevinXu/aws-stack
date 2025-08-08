@@ -54,6 +54,29 @@ The agent was configured with specialized instructions for MCP protocol testing,
 - **Timeout:** 30 seconds
 - **ARN:** `arn:aws:lambda:us-west-2:313117444016:function:BedrockAgentStack-McpTestLambdaD6633A7D-PTlUqL3kxivP`
 
+**MCP Server URL Configuration:**
+The remote MCP server URL is configured in two locations:
+
+1. **CDK Stack Environment Variable** (`lib/bedrock-agent-stack.ts:20`):
+```typescript
+environment: {
+  MCP_SERVER_URL: 'https://sybw5cuj41.execute-api.us-west-2.amazonaws.com/prod/mcp',
+  LOG_LEVEL: 'INFO'
+}
+```
+
+2. **Lambda Function Constant** (`lambda/mcp-test-agent/index.py:15`):
+```python
+MCP_SERVER_URL = "https://sybw5cuj41.execute-api.us-west-2.amazonaws.com/prod/mcp"
+```
+
+**MCP Protocol Integration:**
+The Lambda function makes HTTP POST requests to the configured URL with JSON-RPC formatted MCP protocol messages using `urllib3.PoolManager()`. Each action group API maps to a specific MCP method:
+
+- `/test-mcp-initialize` → `{"jsonrpc": "2.0", "method": "initialize", "id": 1}`
+- `/test-mcp-tools-list` → `{"jsonrpc": "2.0", "method": "tools/list", "id": 2}`  
+- `/test-mcp-tools-call` → `{"jsonrpc": "2.0", "method": "tools/call", "params": {...}, "id": 3}`
+
 **Action Group APIs:**
 1. **`/test-mcp-initialize`** - Tests MCP handshake initialization
 2. **`/test-mcp-tools-list`** - Retrieves available tools from MCP server
