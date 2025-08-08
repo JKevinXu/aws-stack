@@ -226,6 +226,48 @@ python inline_agent_mcp.py
 ✅ **Error Handling**: Robust handling of network and API failures  
 ✅ **Async Operations**: Efficient non-blocking architecture  
 
+## Next Steps: Authorization Headers
+
+### Current State
+Implementation connects to MCP server without authentication. Production requires authorization.
+
+### Implementation Options
+
+#### Bearer Token Authentication
+```python
+class MCPClient:
+    def __init__(self, server_url: str, auth_token: str = None):
+        self.server_url = server_url
+        self.auth_token = auth_token
+    
+    async def make_request(self, method: str, params: Dict[str, Any] = None):
+        headers = {'Content-Type': 'application/json'}
+        if self.auth_token:
+            headers['Authorization'] = f'Bearer {self.auth_token}'
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(self.server_url, json=payload, headers=headers) as response:
+                return await response.json()
+```
+
+#### Environment Configuration
+```python
+import os
+auth_token = os.getenv('MCP_AUTH_TOKEN')
+mcp_client = MCPClient(server_url, auth_token=auth_token)
+```
+
+#### Server-Side Validation
+```python
+# In lambda/mcp-server/index.py
+def lambda_handler(event, context):
+    auth_header = event.get('headers', {}).get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        # Validate token logic here
+    # Continue with MCP processing...
+```
+
 ## Future Extensions
 
 - **Multi-Tool Support**: Integration with additional MCP servers
