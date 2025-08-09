@@ -101,6 +101,15 @@ def lambda_handler(event, context):
                 }
             else:
                 raise ValueError(f"Unknown tool: {tool_name}")
+        elif method == 'notifications/initialized':
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': ''
+            }
         else:
             raise ValueError(f"Unknown method: {method}")
         
