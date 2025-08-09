@@ -102,13 +102,14 @@ def lambda_handler(event, context):
             else:
                 raise ValueError(f"Unknown tool: {tool_name}")
         elif method == 'notifications/initialized':
+            # Notifications don't get a JSON-RPC response, just HTTP 204 No Content
             return {
-                'statusCode': 200,
+                'statusCode': 204,
                 'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': ''
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                }
             }
         else:
             raise ValueError(f"Unknown method: {method}")
