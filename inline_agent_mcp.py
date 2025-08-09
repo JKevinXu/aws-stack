@@ -6,77 +6,21 @@ Uses the existing MCP server to demonstrate inline agent capabilities
 
 import asyncio
 import json
-import os
 from typing import Dict, Any, List
 import boto3
 import logging
+
+# Import our new MCP client
+from mcp_client import MCPSDKClient, MCPClientFactory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class MCPClient:
-    """Simple MCP client for communicating with MCP servers via HTTP"""
-    
-    def __init__(self, server_url: str):
-        self.server_url = server_url
-        self.session_id = 1
-        
-    async def make_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Make a JSON-RPC request to the MCP server"""
-        import aiohttp
-        
-        payload = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "id": self.session_id
-        }
-        
-        if params:
-            payload["params"] = params
-            
-        self.session_id += 1
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.server_url,
-                    json=payload,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'bedrock-inline-agent/1.0'
-                    }
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        return result
-                    else:
-                        error_text = await response.text()
-                        raise Exception(f"HTTP {response.status}: {error_text}")
-                        
-        except Exception as e:
-            logger.error(f"MCP request failed: {str(e)}")
-            raise
-    
-    async def initialize(self) -> Dict[str, Any]:
-        """Initialize connection with MCP server"""
-        return await self.make_request("initialize")
-    
-    async def list_tools(self) -> Dict[str, Any]:
-        """Get list of available tools from MCP server"""
-        return await self.make_request("tools/list")
-    
-    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Call a specific tool on the MCP server"""
-        return await self.make_request("tools/call", {
-            "name": name,
-            "arguments": arguments
-        })
-
 class ActionGroup:
     """Represents an action group with MCP clients"""
     
-    def __init__(self, name: str, mcp_clients: List[MCPClient]):
+    def __init__(self, name: str, mcp_clients: List[MCPSDKClient]):
         self.name = name
         self.mcp_clients = mcp_clients
         self.available_tools = []
@@ -111,6 +55,14 @@ class ActionGroup:
                 continue
         
         raise Exception(f"No MCP client could execute tool: {tool_name}")
+    
+    async def close(self):
+        """Close all MCP clients"""
+        for client in self.mcp_clients:
+            try:
+                await client.close()
+            except Exception as e:
+                logger.error(f"Error closing MCP client: {str(e)}")
 
 class InlineAgent:
     """
@@ -129,6 +81,11 @@ class InlineAgent:
         """Initialize all action groups"""
         for action_group in self.action_groups:
             await action_group.initialize()
+    
+    async def close(self):
+        """Close all action groups and their clients"""
+        for action_group in self.action_groups:
+            await action_group.close()
     
     async def invoke(self, input_text: str) -> str:
         """
@@ -260,8 +217,8 @@ async def main():
     # Your existing MCP server URL
     mcp_server_url = "https://sybw5cuj41.execute-api.us-west-2.amazonaws.com/prod/mcp"
     
-    # Create MCP client
-    mcp_client = MCPClient(mcp_server_url)
+    # Create MCP client using the factory
+    mcp_client = MCPClientFactory.create_sdk_client(mcp_server_url)
     
     # Create action group with MCP client
     action_group = ActionGroup(
@@ -295,17 +252,19 @@ async def main():
             print(f"\nFinal Answer: {result}")
         except Exception as e:
             print(f"Error: {str(e)}")
+        finally:
+            # Clean up MCP connections
+            await agent.close()
         
         print("\n" + "-"*60)
 
 if __name__ == "__main__":
-    # Install required dependencies if not present
+    # Install required dependencies if not present - MCP SDK is now used instead of aiohttp
     try:
-        import aiohttp
+        from mcp_client import MCPSDKClient
     except ImportError:
-        print("Installing required dependency: aiohttp")
-        os.system("pip install aiohttp")
-        import aiohttp
+        print("MCP client module not found. Make sure mcp_client.py is in the same directory.")
+        exit(1)
     
     # Run the demonstration
     asyncio.run(main())
