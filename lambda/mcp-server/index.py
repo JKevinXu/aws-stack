@@ -102,7 +102,7 @@ def lambda_handler(event, context):
             else:
                 raise ValueError(f"Unknown tool: {tool_name}")
         elif method == 'notifications/initialized':
-            # Notifications don't get a JSON-RPC response, just HTTP 204 No Content
+            # Return HTTP 204 with no body or Content-Type header for notifications
             return {
                 'statusCode': 204,
                 'headers': {
