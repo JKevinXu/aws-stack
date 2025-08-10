@@ -1,0 +1,22 @@
+{
+  "name": "bedrock-agentcore-proxy",
+  "version": "1.0.0",
+  "description": "AWS Lambda proxy for Bedrock Agent Core with IAM authentication",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "bedrock",
+    "agent",
+    "proxy",
+    "authentication"
+  ],
+  "author": "AWS CDK",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.490.0"
+  }
+}

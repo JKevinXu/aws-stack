@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { AwsStackStack } from '../lib/aws-stack-stack';
 import { ApiGatewayMcpStack } from '../lib/api-gateway-mcp-stack';
 import { BedrockAgentStack } from '../lib/bedrock-agent-stack';
+import { BedrockAgentCoreProxyStack } from '../lib/bedrock-agentcore-proxy-stack';
 
 const app = new cdk.App();
 new AwsStackStack(app, 'AwsStackStack', {
@@ -29,6 +30,12 @@ new ApiGatewayMcpStack(app, 'ApiGatewayMcpStack', {
 
 // Create Bedrock Agent Stack for MCP testing
 new BedrockAgentStack(app, 'BedrockAgentStack', {
+  /* Use the same environment configuration as the main stack */
+  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+});
+
+// Create Bedrock Agent Core Proxy Stack
+new BedrockAgentCoreProxyStack(app, 'BedrockAgentCoreProxyStack', {
   /* Use the same environment configuration as the main stack */
   // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
 });
