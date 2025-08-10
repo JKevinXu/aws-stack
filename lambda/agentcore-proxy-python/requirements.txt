@@ -4,3 +4,4 @@ bedrock-agentcore
 bedrock-agentcore-starter-toolkit
 strands-agents
 strands-agents-tools
+aiohttp>=3.8.0

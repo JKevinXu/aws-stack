@@ -2,9 +2,12 @@ import json
 import os
 import time
 import logging
-from typing import Dict, Any, Optional
+import asyncio
+import re
+from typing import Dict, Any, Optional, List
 import boto3
 from botocore.exceptions import ClientError
+from contextlib import AsyncExitStack
 
 # Configure logging
 logger = logging.getLogger()
@@ -15,78 +18,310 @@ region = os.environ.get('AWS_REGION', 'us-west-2')
 # Note: For demo purposes, we'll initialize this only when needed
 # bedrock_client = boto3.client('bedrock-agent-runtime', region_name=region)
 
+# MCP Client classes for inline agent implementation
+
+class MCPSDKClient:
+    """Simplified MCP client for Lambda environment"""
+    
+    def __init__(self, server_url: str):
+        self.server_url = server_url
+        self._initialized = False
+        self._tools_cache = None
+    
+    async def initialize(self) -> Dict[str, Any]:
+        """Initialize connection with MCP server"""
+        if self._initialized:
+            return {"result": "already_initialized"}
+        
+        try:
+            # For Lambda, we'll use a simplified approach without external HTTP libraries
+            # In a full implementation, this would use the MCP SDK
+            self._initialized = True
+            return {"result": "initialized"}
+        except Exception as e:
+            logger.error(f"Failed to initialize MCP client: {str(e)}")
+            raise
+    
+    async def list_tools(self) -> Dict[str, Any]:
+        """List available tools from MCP server"""
+        try:
+            # For demo purposes, return a simple tool set
+            # In production, this would query the actual MCP server
+            tools = [
+                {
+                    "name": "add",
+                    "description": "Add two numbers together",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number", "description": "First number"},
+                            "b": {"type": "number", "description": "Second number"}
+                        },
+                        "required": ["a", "b"]
+                    }
+                }
+            ]
+            return {"result": {"tools": tools}}
+        except Exception as e:
+            logger.error(f"Failed to list tools: {str(e)}")
+            return {"error": str(e)}
+    
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a tool on the MCP server"""
+        try:
+            # For demo purposes, implement basic math operations
+            if tool_name == "add" and "a" in arguments and "b" in arguments:
+                result = arguments["a"] + arguments["b"]
+                return {
+                    "result": {
+                        "content": [{"text": str(result)}]
+                    }
+                }
+            else:
+                return {"error": f"Unknown tool or invalid arguments: {tool_name}"}
+        except Exception as e:
+            logger.error(f"Tool execution failed: {str(e)}")
+            return {"error": str(e)}
+    
+    async def close(self):
+        """Close the MCP client connection"""
+        self._initialized = False
+
+class ActionGroup:
+    """Represents an action group with MCP clients"""
+    
+    def __init__(self, name: str, mcp_clients: List[MCPSDKClient]):
+        self.name = name
+        self.mcp_clients = mcp_clients
+        self.available_tools = []
+    
+    async def initialize(self):
+        """Initialize all MCP clients and gather available tools"""
+        for client in self.mcp_clients:
+            try:
+                # Initialize the client
+                init_response = await client.initialize()
+                logger.info(f"MCP client initialized: {init_response}")
+                
+                # Get available tools
+                tools_response = await client.list_tools()
+                if 'result' in tools_response and 'tools' in tools_response['result']:
+                    tools = tools_response['result']['tools']
+                    self.available_tools.extend(tools)
+                    tool_names = [tool['name'] for tool in tools]
+                    logger.info(f"Connected to server with tools: {tool_names}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize MCP client: {str(e)}")
+    
+    async def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a tool using the appropriate MCP client"""
+        for client in self.mcp_clients:
+            try:
+                result = await client.call_tool(tool_name, arguments)
+                return result
+            except Exception as e:
+                logger.error(f"Tool execution failed with client: {str(e)}")
+                continue
+        
+        raise Exception(f"No MCP client could execute tool: {tool_name}")
+    
+    async def close(self):
+        """Close all MCP clients"""
+        for client in self.mcp_clients:
+            try:
+                await client.close()
+            except Exception as e:
+                logger.error(f"Error closing MCP client: {str(e)}")
+
+class InlineAgent:
+    """
+    Bedrock Inline Agent with MCP integration
+    Simplified version for Lambda deployment
+    """
+    
+    def __init__(self, foundation_model: str, instruction: str, agent_name: str, action_groups: List[ActionGroup]):
+        self.foundation_model = foundation_model
+        self.instruction = instruction
+        self.agent_name = agent_name
+        self.action_groups = action_groups
+        self.bedrock_client = boto3.client('bedrock-runtime', region_name=region)
+    
+    async def initialize(self):
+        """Initialize all action groups"""
+        for action_group in self.action_groups:
+            await action_group.initialize()
+    
+    async def close(self):
+        """Close all action groups and their clients"""
+        for action_group in self.action_groups:
+            await action_group.close()
+    
+    async def invoke(self, input_text: str) -> str:
+        """
+        Invoke the inline agent with the given input
+        This is a simplified implementation that demonstrates MCP integration
+        """
+        await self.initialize()
+        
+        # Get available tools from all action groups
+        all_tools = []
+        for action_group in self.action_groups:
+            all_tools.extend(action_group.available_tools)
+        
+        # Create a system prompt that includes tool information
+        system_prompt = f"""{self.instruction}
+
+Available Tools:
+{json.dumps(all_tools, indent=2)}
+
+IMPORTANT: When you need to use a tool, respond with ONLY a JSON object in this exact format:
+{{"tool_name": "tool_name", "arguments": {{"param1": "value1", "param2": "value2"}}}}
+
+Do not add any other text before or after the JSON. Just return the JSON object.
+
+If no tool is needed, respond normally with text."""
+        
+        # Prepare the conversation - content must be a list for Bedrock
+        messages = [
+            {
+                "role": "user",
+                "content": [{"text": input_text}]
+            }
+        ]
+        
+        max_iterations = 5  # Prevent infinite loops
+        iteration = 0
+        
+        while iteration < max_iterations:
+            iteration += 1
+            
+            # Call Bedrock model
+            response = self.bedrock_client.converse(
+                modelId=self.foundation_model,
+                messages=messages,
+                system=[{"text": system_prompt}],
+                inferenceConfig={
+                    "maxTokens": 2000,
+                    "temperature": 0.1
+                }
+            )
+            
+            assistant_message = response['output']['message']['content'][0]['text']
+            messages.append({
+                "role": "assistant",
+                "content": [{"text": assistant_message}]
+            })
+            
+            logger.info(f"Agent thought: {assistant_message}")
+            
+            # Check if the response contains a tool call
+            try:
+                # Try to parse as JSON tool call
+                tool_call_json = None
+                if assistant_message.strip().startswith('{') and assistant_message.strip().endswith('}'):
+                    try:
+                        tool_call_json = json.loads(assistant_message.strip())
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Also check if the response contains a JSON object within text
+                if not tool_call_json:
+                    json_match = re.search(r'\{[^{}]*"tool_name"[^{}]*\}', assistant_message)
+                    if json_match:
+                        try:
+                            tool_call_json = json.loads(json_match.group())
+                        except json.JSONDecodeError:
+                            pass
+                
+                if tool_call_json and 'tool_name' in tool_call_json and 'arguments' in tool_call_json:
+                    tool_name = tool_call_json['tool_name']
+                    arguments = tool_call_json['arguments']
+                    
+                    logger.info(f"Tool use: {tool_name} with inputs: {arguments}")
+                    
+                    # Execute the tool
+                    try:
+                        for action_group in self.action_groups:
+                            tool_result = await action_group.execute_tool(tool_name, arguments)
+                            
+                            if 'result' in tool_result:
+                                result_content = tool_result['result']['content'][0]['text']
+                                logger.info(f"Tool result: {result_content}")
+                                
+                                # Add tool result to conversation
+                                messages.append({
+                                    "role": "user",
+                                    "content": [{"text": f"Tool '{tool_name}' returned: {result_content}"}]
+                                })
+                                break
+                            else:
+                                logger.error(f"Tool execution error: {tool_result}")
+                                messages.append({
+                                    "role": "user",
+                                    "content": [{"text": f"Tool '{tool_name}' failed: {tool_result}"}]
+                                })
+                                break
+                    
+                    except Exception as e:
+                        error_msg = f"Tool execution failed: {str(e)}"
+                        logger.error(error_msg)
+                        messages.append({
+                            "role": "user",
+                            "content": [{"text": error_msg}]
+                        })
+                else:
+                    # Not a tool call, return the response
+                    await self.close()
+                    return assistant_message
+                    
+            except Exception as e:
+                # Error parsing, return as is
+                logger.error(f"Error parsing response: {str(e)}")
+                await self.close()
+                return assistant_message
+        
+        await self.close()
+        return "Maximum iterations reached. Please try again with a simpler request."
+
 def handle_inline_agent_logic(input_text: str) -> str:
     """
-    Inline MCP-like agent logic for demo/testing purposes
-    This simulates an agent that can handle various requests
+    Wrapper function to handle async inline agent invocation
+    This function maintains backward compatibility while using the new InlineAgent
     """
-    input_lower = input_text.lower()
-    
-    # Simple pattern matching for demo purposes
-    if 'aws services' in input_lower or 'aws service' in input_lower:
-        return """Here are some key AWS services:
-
-**Compute:**
-- EC2: Virtual servers in the cloud
-- Lambda: Serverless compute service
-- ECS/EKS: Container orchestration
-
-**Storage:**
-- S3: Object storage service
-- EBS: Block storage for EC2
-- EFS: Managed file storage
-
-**Database:**
-- RDS: Managed relational databases
-- DynamoDB: NoSQL database
-- Aurora: High-performance managed database
-
-**AI/ML:**
-- Bedrock: Fully managed foundation models
-- SageMaker: Machine learning platform
-- Comprehend: Natural language processing
-
-**Networking:**
-- VPC: Virtual Private Cloud
-- CloudFront: Content delivery network
-- Route 53: DNS service
-
-Would you like more details about any specific service?"""
-
-    elif 'hello' in input_lower or 'hi' in input_lower:
-        return f"Hello! I'm a Bedrock Agent Core proxy. I can help you with information about AWS services and more. What would you like to know?"
-
-    elif 'bedrock' in input_lower:
-        return """Amazon Bedrock is a fully managed service that offers a choice of high-performing foundation models (FMs) from leading AI companies like AI21 Labs, Anthropic, Cohere, Meta, Stability AI, and Amazon via a single API, along with a broad set of capabilities you need to build generative AI applications with security, privacy, and responsible AI.
-
-Key features:
-- Access to multiple foundation models
-- Fine-tuning capabilities  
-- Retrieval Augmented Generation (RAG)
-- Agents for complex workflows
-- Built-in security and compliance"""
-
-    elif 'help' in input_lower:
-        return """I can help you with:
-- Information about AWS services
-- Bedrock and AI/ML services
-- General cloud computing questions
-- Architecture guidance
-
-Just ask me anything you'd like to know!"""
-
-    else:
-        # Generic response with some helpful context
-        return f"""I received your message: "{input_text}"
-
-I'm a Bedrock Agent Core proxy that can provide information about AWS services, cloud architecture, and more. Here are some things you can ask me about:
-
-- AWS services and their use cases
-- Cloud architecture patterns  
-- Bedrock and AI/ML services
-- Best practices for cloud development
-
-What specific information would you like to know?"""
+    try:
+        # Create a simple async wrapper
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Create MCP client for demo purposes
+        mcp_client = MCPSDKClient("demo-server")
+        
+        # Create action group
+        action_group = ActionGroup(
+            name="GeneralActionGroup",
+            mcp_clients=[mcp_client]
+        )
+        
+        # Create inline agent
+        agent = InlineAgent(
+            foundation_model="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            instruction="You are a helpful assistant that can perform various tasks including mathematical calculations. When asked to perform calculations or other tasks that require tools, use the appropriate tools to get accurate results.",
+            agent_name="GeneralAgent",
+            action_groups=[action_group]
+        )
+        
+        # Run the agent
+        try:
+            result = loop.run_until_complete(agent.invoke(input_text))
+            return result
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        logger.error(f"Error in inline agent logic: {str(e)}")
+        # Fallback to a simple response
+        return f"I'm an AI assistant that can help with various tasks. You asked: '{input_text}'. While I encountered an issue with advanced processing, I'm here to help. Could you please rephrase your question or try again?"
 
 
 def lambda_handler(event, context):
