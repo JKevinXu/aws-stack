@@ -20,7 +20,7 @@ External Website → API Gateway → Lambda Proxy → Bedrock Agent Core
 | Component | Resource | Status |
 |-----------|----------|--------|
 | **API Gateway** | `i03qauf1s6.execute-api.us-west-2.amazonaws.com` | ✅ Active |
-| **Lambda Function** | Node.js 18.x with multi-auth | ✅ Deployed |
+| **Lambda Function** | Python 3.11 with multi-auth | ✅ Deployed |
 | **CDK Stack** | `BedrockAgentCoreProxyStack` | ✅ Complete |
 | **IAM Role** | Bedrock permissions configured | ✅ Active |
 
@@ -89,12 +89,18 @@ Currently returns demo responses that validate the complete flow. Example respon
 
 ### Production Ready
 1. **Replace demo response** with actual Bedrock Agent Core client:
-   ```javascript
-   const response = await client.invoke_agent_runtime({
-     agentRuntimeArn: targetAgentArn,
-     qualifier: endpointQualifier,
-     payload: input
-   });
+   ```python
+   import boto3
+   
+   # Initialize the Bedrock Agent Core client
+   bedrock_client = boto3.client('bedrock-agentcore', region_name=region)
+   
+   # Invoke the agent
+   response = bedrock_client.invoke_agent_runtime(
+       agentRuntimeArn=target_agent_arn,
+       qualifier=endpoint_qualifier,
+       payload=input_text
+   )
    ```
 
 2. **Enable production mode**:
@@ -102,6 +108,8 @@ Currently returns demo responses that validate the complete flow. Example respon
    NODE_ENV=production
    VALID_API_KEYS=your-secret-keys
    ```
+   
+   Note: The Python implementation uses the same environment variable names for consistency.
 
 3. **Restrict CORS** to your domain
 
