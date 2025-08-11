@@ -1,0 +1,31 @@
+# Lambda deployment artifacts
+lambda-deployment.zip
+*.json
+venv/
+package/
+__pycache__/
+*.pyc
+.DS_Store
+
+# InlineAgent source - included in repo for Lambda deployment
+# !InlineAgent/
+
+# Test outputs
+response.json
+test-response.json
+calculation-test.json
+
+# Python environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
