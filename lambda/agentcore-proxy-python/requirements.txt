@@ -5,3 +5,4 @@ bedrock-agentcore-starter-toolkit
 strands-agents
 strands-agents-tools
 aiohttp>=3.8.0
+urllib3>=1.26.0
