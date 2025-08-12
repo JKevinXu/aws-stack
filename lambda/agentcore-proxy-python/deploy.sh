@@ -9,9 +9,9 @@ set -e
 FUNCTION_NAME=${2:-agentcore-proxy-python}
 ROLE_ARN=$3
 RUNTIME="python3.11"
-TIMEOUT=300
+TIMEOUT=3000
 MEMORY_SIZE=1024
-MCP_SERVER_URL="https://sybw5cuj41.execute-api.us-west-2.amazonaws.com/prod/mcp"
+MCP_SERVER_URL="https://bwzo9wnhy3.execute-api.us-west-2.amazonaws.com/beta/mcp"
 
 # Colors for output
 RED='\033[0;31m'
@@ -55,37 +55,27 @@ fi
 
 print_status "Starting Lambda deployment process..."
 
-# Change to the Lambda function directory
-cd /Users/kevinxu/ws4/aws-stack/lambda/agentcore-proxy-python
+# Get current directory (deployment script directory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
 
 # Clean up any previous build artifacts
 print_status "Cleaning up previous build artifacts..."
-rm -rf venv package lambda-deployment.zip
+rm -rf lambda-deployment.zip
 
-# Create virtual environment
-print_status "Creating Python 3.11 virtual environment..."
-python3.11 -m venv venv
-source venv/bin/activate
+# Check if Docker is installed
+if ! command -v docker &> /dev/null; then
+    print_error "Docker is not installed. Please install Docker first."
+    exit 1
+fi
 
-# Upgrade pip
-print_status "Upgrading pip..."
-pip install --upgrade pip --quiet
+# Build deployment package using Docker with faster build options
+print_status "Building deployment package using Docker (linux/amd64)..."
+DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -f Dockerfile.build -t lambda-builder . --progress=plain
 
-# Install dependencies
-print_status "Installing dependencies from requirements.txt..."
-mkdir -p package
-pip install -r requirements.txt -t ./package --quiet
-
-# Copy application code
-print_status "Copying application code..."
-cp -r InlineAgent ./package/
-cp lambda_function_new.py ./package/
-
-# Create deployment package
-print_status "Creating deployment package..."
-cd package
-zip -r ../lambda-deployment.zip . -x "*.pyc" -x "*__pycache__*" -x "*.DS_Store" > /dev/null 2>&1
-cd ..
+# Extract the deployment package from the container
+print_status "Extracting deployment package..."
+docker run --platform linux/amd64 --rm --entrypoint="" -v "${SCRIPT_DIR}:/output" lambda-builder cp /tmp/lambda-deployment.zip /output/
 
 # Get package size
 PACKAGE_SIZE=$(ls -lh lambda-deployment.zip | awk '{print $5}')
@@ -157,8 +147,7 @@ echo ""
 
 # Cleanup
 print_status "Cleaning up build artifacts..."
-deactivate
-rm -rf venv package
+docker rmi lambda-builder > /dev/null 2>&1 || true
 
 # Keep the deployment package for backup
 print_status "Deployment package saved as: lambda-deployment.zip"

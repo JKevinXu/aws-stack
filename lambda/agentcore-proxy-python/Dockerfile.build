@@ -1,0 +1,22 @@
+FROM public.ecr.aws/lambda/python:3.11
+
+# Set working directory
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+
+# Install dependencies directly into the Lambda task root so they are included in the zip
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt -t ${LAMBDA_TASK_ROOT}/
+
+# Copy source code
+COPY InlineAgent/ ./InlineAgent/
+COPY lambda_function_new.py ./
+COPY create_zip.py ./
+
+# Create the deployment package using Python script
+RUN python3 create_zip.py
+
+# Default command to copy the zip file to output directory
+CMD ["sh", "-c", "cp /tmp/lambda-deployment.zip /output/ 2>/dev/null || echo 'Deployment package ready at /tmp/lambda-deployment.zip'"]
