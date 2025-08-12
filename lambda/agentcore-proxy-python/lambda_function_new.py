@@ -35,6 +35,13 @@ async def process_with_bedrock(input_text: str) -> str:
 
 def lambda_handler(event, context):
     """Lambda handler with Bedrock Inline Agent integration"""
+    # Log the incoming event and context for debugging
+    logger.info(f"Event: {json.dumps(event, indent=2)}")
+    logger.info(f"Context: {context}")
+    logger.info(f"Context type: {type(context)}")
+    if hasattr(context, '__dict__'):
+        logger.info(f"Context attributes: {context.__dict__}")
+    
     try:
         # Parse input
         body = json.loads(event.get('body', '{}')) if event.get('body') else event
