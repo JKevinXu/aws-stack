@@ -11,11 +11,17 @@ from InlineAgent.agent import InlineAgent
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-mcp_server_url = os.environ.get('MCP_SERVER_URL', 'https://sybw5cuj41.execute-api.us-west-2.amazonaws.com/prod/mcp')
+mcp_server_url = os.environ.get('MCP_SERVER_URL', 'https://bwzo9wnhy3.execute-api.us-west-2.amazonaws.com/beta/mcp')
 
-async def process_with_bedrock(input_text: str) -> str:
+async def process_with_bedrock(input_text: str, auth_header: str = None) -> str:
     """Process request using Bedrock Inline Agent with MCP"""
-    mcp_client = await MCPHttpStreamable.create(url=mcp_server_url)
+    # Prepare headers for MCP client
+    headers = {}
+    if auth_header:
+        headers['Authorization'] = auth_header
+        logger.info(f"Passing Authorization header to MCP client: {auth_header[:20]}...")
+    
+    mcp_client = await MCPHttpStreamable.create(url=mcp_server_url, headers=headers)
     
     try:
         # Create action group and agent
@@ -47,11 +53,19 @@ def lambda_handler(event, context):
         body = json.loads(event.get('body', '{}')) if event.get('body') else event
         input_text = body.get('input')
         
+        # Extract Authorization header from event
+        headers = event.get('headers', {})
+        auth_header = headers.get('Authorization') or headers.get('authorization')
+        if auth_header:
+            logger.info(f"Found Authorization header: {auth_header[:20]}...")
+        else:
+            logger.info("No Authorization header found in request")
+        
         # Process with Bedrock agent
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            response_text = loop.run_until_complete(process_with_bedrock(input_text))
+            response_text = loop.run_until_complete(process_with_bedrock(input_text, auth_header))
         finally:
             loop.close()
         
