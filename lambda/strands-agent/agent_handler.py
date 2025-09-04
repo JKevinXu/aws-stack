@@ -1,53 +1,27 @@
 from strands import Agent
 from strands_tools import http_request
-from typing import Dict, Any
+from strands.tools.mcp import MCPClient
+from mcp.client.streamable_http import streamablehttp_client
+from typing import Dict, Any, Optional
 import json
 
-# Define a weather-focused system prompt
-WEATHER_SYSTEM_PROMPT = """You are a weather assistant with HTTP capabilities. You can:
+# Define the MCP-enabled assistant system prompt
+MCP_ASSISTANT_PROMPT = """You are a helpful AI assistant with access to external tools and services. You can:
 
-1. Make HTTP requests to the National Weather Service API
-2. Process and display weather forecast data
-3. Provide weather information for locations in the United States
+1. Use specialized tools from connected MCP servers
+2. Process and analyze various types of content
 
-When retrieving weather information:
-1. First get the coordinates or grid information using https://api.weather.gov/points/{latitude},{longitude} or https://api.weather.gov/points/{zipcode}
-2. Then use the returned forecast URL to get the actual forecast
-
-When displaying responses:
-- Format weather data in a human-readable way
-- Highlight important information like temperature, precipitation, and alerts
-- Handle errors appropriately
-- Convert technical terms to user-friendly language
-
-Always explain the weather conditions clearly and provide context for the forecast.
-"""
-
-# Define a general assistant system prompt as an alternative
-GENERAL_ASSISTANT_PROMPT = """You are a helpful AI assistant with web browsing capabilities. You can:
-
-1. Make HTTP requests to public APIs and websites
-2. Search for information on the web
-3. Help with general questions and tasks
-4. Process and analyze web content
-
-When making web requests:
-- Use appropriate headers and follow rate limits
-- Handle errors gracefully
-- Provide clear summaries of the information found
-- Always cite your sources when providing information from web requests
-
-Be helpful, accurate, and thorough in your responses.
+Choose the most appropriate tool for each task and provide clear explanations of your actions.
 """
 
 # The handler function signature `def handler(event, context)` is what Lambda
 # looks for when invoking your function.
 def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
-    AWS Lambda handler function for Strands Agent
+    AWS Lambda handler function for Strands Agent with MCP integration
     
     Args:
-        event: Lambda event containing the prompt and optional configuration
+        event: Lambda event containing the prompt, optional configuration, and MCP authorization token
         context: Lambda context object
         
     Returns:
@@ -65,18 +39,69 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 })
             }
         
-        # Choose agent type based on event configuration
-        agent_type = event.get('agent_type', 'weather')
+        # Extract MCP configuration
+        mcp_authorization_token = event.get('mcp_authorization_token')
+        use_mcp = event.get('use_mcp', True)  # Enable MCP by default
         
-        if agent_type == 'weather':
-            system_prompt = WEATHER_SYSTEM_PROMPT
-        else:
-            system_prompt = GENERAL_ASSISTANT_PROMPT
+        # Use the MCP-enabled assistant prompt
+        system_prompt = MCP_ASSISTANT_PROMPT
         
-        # Create the Strands agent with specified system prompt and tools
+        # Initialize tools list with basic HTTP request capability
+        tools = [http_request]
+        
+        # Add MCP tools if enabled and authorization token is provided
+        if use_mcp and mcp_authorization_token:
+            try:
+                # Configure MCP client with streamable HTTP transport
+                mcp_url = "https://bwzo9wnhy3.execute-api.us-west-2.amazonaws.com/beta/mcp"
+                # Add Bearer prefix automatically to the token
+                headers = {"Authorization": f"Bearer {mcp_authorization_token}"}
+                
+                mcp_client = MCPClient(
+                    lambda: streamablehttp_client(
+                        url=mcp_url,
+                        headers=headers
+                    )
+                )
+                
+                # Use MCP client within context manager as required by the protocol
+                with mcp_client:
+                    # Get tools from MCP server
+                    mcp_tools = mcp_client.list_tools_sync()
+                    tools.extend(mcp_tools)
+                    
+                    # Create the Strands agent with all available tools
+                    agent = Agent(
+                        system_prompt=system_prompt,
+                        tools=tools,
+                    )
+
+                    # Process the prompt through the agent
+                    response = agent(prompt)
+                    
+                    return {
+                        'statusCode': 200,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': json.dumps({
+                            'response': str(response),
+                            'mcp_enabled': True,
+                            'mcp_tools_count': len(mcp_tools),
+                            'prompt': prompt
+                        })
+                    }
+                    
+            except Exception as mcp_error:
+                # Log MCP error and fall back to basic functionality
+                print(f"MCP connection failed: {mcp_error}")
+                # Continue with basic tools only
+                
+        # Create agent with basic tools (fallback or when MCP is disabled)
         agent = Agent(
             system_prompt=system_prompt,
-            tools=[http_request],
+            tools=tools,
         )
 
         # Process the prompt through the agent
@@ -91,7 +116,8 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             'body': json.dumps({
                 'response': str(response),
-                'agent_type': agent_type,
+                'mcp_enabled': False,
+                'mcp_tools_count': 0,
                 'prompt': prompt
             })
         }
