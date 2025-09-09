@@ -21,18 +21,88 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     AWS Lambda handler function for Strands Agent with MCP integration
     
     Args:
-        event: Lambda event containing the prompt, optional configuration, and MCP authorization token
+        event: Lambda event (can be direct or API Gateway event)
         context: Lambda context object
         
     Returns:
         Dictionary containing the agent's response
     """
     try:
-        # Extract prompt from event
-        prompt = event.get('prompt', '')
+        # Log the incoming event for debugging
+        print(f"Received event: {json.dumps(event)}")
+        
+        # Handle different event types
+        if 'httpMethod' in event and 'body' in event:
+            # This is an API Gateway event
+            body = event.get('body', '{}')
+            print(f"API Gateway body: {body}")
+            
+            if isinstance(body, str):
+                try:
+                    payload = json.loads(body) if body else {}
+                except json.JSONDecodeError:
+                    return {
+                        'statusCode': 400,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': json.dumps({
+                            'error': 'Invalid JSON in request body',
+                            'message': 'Request body must be valid JSON'
+                        })
+                    }
+            else:
+                payload = body if body else {}
+            
+            # Add context information from API Gateway
+            if isinstance(payload, dict):
+                payload['requestId'] = event.get('requestContext', {}).get('requestId')
+                payload['sourceIp'] = event.get('requestContext', {}).get('identity', {}).get('sourceIp')
+        
+        elif 'requestContext' in event and 'http' in event.get('requestContext', {}):
+            # This is a Lambda Function URL event
+            body = event.get('body', '{}')
+            print(f"Function URL body: {body}")
+            
+            if isinstance(body, str):
+                try:
+                    payload = json.loads(body) if body else {}
+                except json.JSONDecodeError:
+                    return {
+                        'statusCode': 400,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': json.dumps({
+                            'error': 'Invalid JSON in request body',
+                            'message': 'Request body must be valid JSON'
+                        })
+                    }
+            else:
+                payload = body if body else {}
+            
+            # Add context information from Function URL
+            if isinstance(payload, dict):
+                payload['requestId'] = event.get('requestContext', {}).get('requestId')
+                payload['sourceIp'] = event.get('requestContext', {}).get('http', {}).get('sourceIp')
+            
+        else:
+            # This is a direct Lambda invocation or other event type
+            payload = event
+        
+        print(f"Extracted payload: {json.dumps(payload)}")
+        
+        # Extract prompt from payload
+        prompt = payload.get('prompt', '')
         if not prompt:
             return {
                 'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
                 'body': json.dumps({
                     'error': 'No prompt provided',
                     'message': 'Please provide a prompt in the event payload'
@@ -40,8 +110,8 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             }
         
         # Extract MCP configuration
-        mcp_authorization_token = event.get('mcp_authorization_token')
-        use_mcp = event.get('use_mcp', True)  # Enable MCP by default
+        mcp_authorization_token = payload.get('mcp_authorization_token')
+        # MCP is always enabled
         
         # Use the MCP-enabled assistant prompt
         system_prompt = MCP_ASSISTANT_PROMPT
@@ -49,8 +119,8 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Initialize tools list with basic HTTP request capability
         tools = [http_request]
         
-        # Add MCP tools if enabled and authorization token is provided
-        if use_mcp and mcp_authorization_token:
+        # Add MCP tools if authorization token is provided
+        if mcp_authorization_token:
             try:
                 # Configure MCP client with streamable HTTP transport
                 mcp_url = "https://bwzo9wnhy3.execute-api.us-west-2.amazonaws.com/beta/mcp"
@@ -98,7 +168,7 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 print(f"MCP connection failed: {mcp_error}")
                 # Continue with basic tools only
                 
-        # Create agent with basic tools (fallback or when MCP is disabled)
+        # Create agent with basic tools (fallback or when MCP token not provided)
         agent = Agent(
             system_prompt=system_prompt,
             tools=tools,
@@ -116,7 +186,7 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             },
             'body': json.dumps({
                 'response': str(response),
-                'mcp_enabled': False,
+                'mcp_enabled': bool(mcp_authorization_token),
                 'mcp_tools_count': 0,
                 'prompt': prompt
             })

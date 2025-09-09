@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -26,7 +25,7 @@ export class StrandsAgentLambdaStack extends cdk.Stack {
       functionName: "StrandsAgentFunction",
       handler: "agent_handler.handler",
       code: lambda.Code.fromAsset(zipApp),
-      timeout: cdk.Duration.seconds(60), // Increased timeout for agent processing
+      timeout: cdk.Duration.seconds(90), // Extended timeout for complex agent operations
       memorySize: 512, // Increased memory for better performance
       layers: [dependenciesLayer],
       architecture: lambda.Architecture.ARM_64,
@@ -61,35 +60,23 @@ export class StrandsAgentLambdaStack extends cdk.Stack {
       }),
     );
 
-    // Create API Gateway to expose the Lambda function
-    const api = new apigateway.RestApi(this, 'StrandsAgentApi', {
-      restApiName: 'Strands Agent Service',
-      description: 'API Gateway for Strands Agent Lambda function',
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
-      },
-    });
 
-    // Create Lambda integration
-    const lambdaIntegration = new apigateway.LambdaIntegration(strandsAgentFunction, {
-      requestTemplates: { "application/json": '{ "statusCode": "200" }' },
-    });
-
-    // Add resource and method
-    const agentResource = api.root.addResource('agent');
-    agentResource.addMethod('POST', lambdaIntegration);
-
-    // Create a Lambda function URL for direct invocation (alternative to API Gateway)
+    // Create a Lambda function URL for direct invocation
+    // For production: use AWS_IAM auth, for testing: use NONE
     const functionUrl = strandsAgentFunction.addFunctionUrl({
-      authType: lambda.FunctionUrlAuthType.NONE,
+      authType: lambda.FunctionUrlAuthType.NONE, // Change to AWS_IAM for production
       cors: {
         allowCredentials: true,
-        allowedHeaders: ['*'],
-        allowedMethods: [lambda.HttpMethod.ALL],
-        allowedOrigins: ['*'],
-        maxAge: cdk.Duration.days(1),
+        allowedHeaders: [
+          'Content-Type',
+          'Authorization', 
+          'X-Amz-Date',
+          'X-Amz-Security-Token',
+          'mcp-authorization-token'
+        ],
+        allowedMethods: [lambda.HttpMethod.POST],
+        allowedOrigins: ['*'], // Restrict to specific domains in production
+        maxAge: cdk.Duration.hours(1),
       },
     });
 
@@ -105,11 +92,6 @@ export class StrandsAgentLambdaStack extends cdk.Stack {
       description: 'The ARN of the Strands Agent Lambda function'
     });
 
-    // Output the API Gateway URL
-    new cdk.CfnOutput(this, 'StrandsAgentApiUrl', {
-      value: api.url,
-      description: 'The URL of the API Gateway for the Strands Agent'
-    });
 
     // Output the Function URL
     new cdk.CfnOutput(this, 'StrandsAgentFunctionUrl', {
