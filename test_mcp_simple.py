@@ -1,51 +1,23 @@
 #!/usr/bin/env python3
 """
-Test script for Strands Agent API Gateway integration
+Test script for Strands Agent Lambda Function URL integration
 """
 
 import json
 import requests
-import boto3
 
 # Replace with your actual token
-AUTH_TOKEN = "eyJraWQiOiJiNzU3Y2QwNmY0N2YzMmIzOTQ1MjBmM2Q0MDljZTQyZCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJhbWMtcWJpei1hdWQiLCJzdWIiOiIxMDEyNzE2NTIiLCJuYmYiOjE3NTczODA3NTksImF1dGhfdGltZSI6MTc1NzM3ODQzMSwiaHR0cHM6Ly9hd3MuYW1hem9uLmNvbS90YWdzIjp7InRyYW5zaXRpdmVfdGFnX2tleXMiOlsiRW1haWwiXSwicHJpbmNpcGFsX3RhZ3MiOnsiRW1haWwiOlsia2V2aW54dUBhbWF6b24uY29tIl19fSwiaXNzIjoiaHR0cHM6Ly9pZHAuZmVkZXJhdGUuYW1hem9uLmNvbSIsInByZWZlcnJlZF91c2VybmFtZSI6ImtldmlueHUiLCJleHAiOjE3NTczODQzNTksImZlZGVyYXRlX3Rva2VuX3B1cnBvc2UiOiJpZF90b2tlbiIsImlhdCI6MTc1NzM4MDc1OSwibm9uY2UiOiI3Yjg0ZDJhNjNmOGU0ZTJmOWQ3YmUzNDU0NDU4MzQ4NiIsImp0aSI6IklELjkyYjE1NzUwLWI1MzgtNDM5NC1iYTZhLTVjOTcwM2I3ZmI4ZiJ9.Psv4RNLNHxfPDbFKr6nSbS0ptB9WwmlZWpLfpXBpbxLvABp7Tr6vEdYXHvpiXBL3HoRKAER69xB-YU5UWZzmAG8VK3gERX7dv1kixgA1CAanMBphM3it9X9lfxiXIH5e7RAb_kvjbRpl7gC3yNFo9Uucw1RSvCIqPEViIeen-C1gI17MhBBo3J4jIe8cylTD4wJ6MrujSZYNG-YQjbldskuLgIt57IvFLgXy3yVLghDHVKdvuWk6oHU9E1YXoixqjifaDSzb_W3h-n3k7ixa2LfO2oRevV_uJcacv3sXLu0-9zeKRXikjRSmSorlYfGkO54eyMmL4Bm8Wqkv439A0Q"
+AUTH_TOKEN = "<YOUR_AUTH_TOKEN>"
 
-# Lambda Function URL will be retrieved from CloudFormation outputs
-
-
-
-
-def get_function_url():
-    """Get the Lambda Function URL from CloudFormation outputs."""
-    try:
-        # Initialize CloudFormation client
-        cf_client = boto3.client('cloudformation', region_name='us-west-2')
-        
-        # Get stack outputs
-        response = cf_client.describe_stacks(StackName='StrandsAgentLambdaStack')
-        outputs = response['Stacks'][0]['Outputs']
-        
-        # Find the Function URL
-        for output in outputs:
-            if output['OutputKey'] == 'StrandsAgentFunctionUrl':
-                return output['OutputValue']
-        
-        print("⚠️  Could not find Function URL in CloudFormation outputs")
-        return None
-        
-    except Exception as e:
-        print(f"⚠️  Could not retrieve Function URL: {e}")
-        return None
+# Direct Lambda Function URL endpoint
+LAMBDA_FUNCTION_URL = "https://zr5sblu3idcilhcthrpfzulrg40dlpss.lambda-url.us-west-2.on.aws/"
 
 
 def test_mcp_integration():
     """Test MCP integration with the Strands Agent via Lambda Function URL."""
     
-    # Get Function URL endpoint
-    api_endpoint = get_function_url()
-    if not api_endpoint:
-        print("❌ Cannot proceed without Function URL")
-        return
+    # Use direct Lambda Function URL endpoint
+    api_endpoint = LAMBDA_FUNCTION_URL
     
     # Test prompt
     test_prompt = "List all available tools and their capabilities. Then help me create an email activity summary."
@@ -118,11 +90,8 @@ def test_mcp_integration():
 def test_email_activity_with_mcp():
     """Test email activity creation with MCP tools via Lambda Function URL (for longer timeout)."""
     
-    # Get Function URL endpoint for longer operations
-    api_endpoint = get_function_url()
-    if not api_endpoint:
-        print("❌ Cannot proceed without Function URL")
-        return
+    # Use direct Lambda Function URL endpoint for longer operations
+    api_endpoint = LAMBDA_FUNCTION_URL
     
     # Email test case
     test_case = {
