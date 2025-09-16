@@ -13,11 +13,7 @@ from agent_handler import handler
 
 app = FastAPI(title="Strands Agent", description="Strands Agent for Bedrock Agent Core")
 
-@app.post("/")
-@app.post("/invoke")
 @app.post("/invocations")
-@app.post("/runtime")
-@app.post("/v1/runtime")
 async def invoke_agent(request: Request):
     """
     Main endpoint for Bedrock Agent Core invocations
