@@ -87,30 +87,48 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             if isinstance(payload, dict):
                 payload['requestId'] = event.get('requestContext', {}).get('requestId')
                 payload['sourceIp'] = event.get('requestContext', {}).get('http', {}).get('sourceIp')
+        
+        elif 'prompt' in event:
+            # This is a direct event from FastAPI wrapper (Bedrock Agent Core)
+            payload = event
+            print(f"Bedrock Agent Core event via FastAPI: {payload}")
             
         else:
             # This is a direct Lambda invocation or other event type
             payload = event
+            print(f"Direct Lambda invocation: {payload}")
         
         print(f"Extracted payload: {json.dumps(payload)}")
         
         # Extract prompt from payload
         prompt = payload.get('prompt', '')
         if not prompt:
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({
+            # Check if this is from Bedrock Agent Core (has jwt_token)
+            if 'jwt_token' in event:
+                # Return simplified error response for Bedrock Agent Core
+                return {
                     'error': 'No prompt provided',
                     'message': 'Please provide a prompt in the event payload'
-                })
-            }
+                }
+            else:
+                # Return full error response for API Gateway/Lambda
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({
+                        'error': 'No prompt provided',
+                        'message': 'Please provide a prompt in the event payload'
+                    })
+                }
         
-        # Extract MCP configuration
-        mcp_authorization_token = payload.get('mcp_authorization_token')
+        # Extract MCP authorization token from Bedrock Agent Core payload
+        mcp_authorization_token = event.get('mcp_authorization_token')
+        
+        print(f"MCP token status: {'Found' if mcp_authorization_token else 'Not found'}")
+        
         # MCP is always enabled
         
         # Use the MCP-enabled assistant prompt
@@ -149,19 +167,30 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                     # Process the prompt through the agent
                     response = agent(prompt)
                     
-                    return {
-                        'statusCode': 200,
-                        'headers': {
-                            'Content-Type': 'application/json',
-                            'Access-Control-Allow-Origin': '*'
-                        },
-                        'body': json.dumps({
+                    # Check if this is from Bedrock Agent Core (has jwt_token)
+                    if 'jwt_token' in event:
+                        # Return simplified response for Bedrock Agent Core
+                        return {
                             'response': str(response),
                             'mcp_enabled': True,
                             'mcp_tools_count': len(mcp_tools),
                             'prompt': prompt
-                        })
-                    }
+                        }
+                    else:
+                        # Return full API Gateway response format
+                        return {
+                            'statusCode': 200,
+                            'headers': {
+                                'Content-Type': 'application/json',
+                                'Access-Control-Allow-Origin': '*'
+                            },
+                            'body': json.dumps({
+                                'response': str(response),
+                                'mcp_enabled': True,
+                                'mcp_tools_count': len(mcp_tools),
+                                'prompt': prompt
+                            })
+                        }
                     
             except Exception as mcp_error:
                 # Log MCP error and fall back to basic functionality
@@ -177,31 +206,52 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         # Process the prompt through the agent
         response = agent(prompt)
         
-        # Return the response in the expected Lambda format
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
+        # Check if this is from Bedrock Agent Core (has jwt_token)
+        if 'jwt_token' in event:
+            # Return simplified response for Bedrock Agent Core
+            return {
                 'response': str(response),
                 'mcp_enabled': bool(mcp_authorization_token),
                 'mcp_tools_count': 0,
                 'prompt': prompt
-            })
-        }
+            }
+        else:
+            # Return the response in the expected Lambda/API Gateway format
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'response': str(response),
+                    'mcp_enabled': bool(mcp_authorization_token),
+                    'mcp_tools_count': 0,
+                    'prompt': prompt
+                })
+            }
         
     except Exception as e:
         # Handle any errors that occur during processing
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
+        print(f"Handler error: {str(e)}")
+        
+        # Check if this is from Bedrock Agent Core (has jwt_token)
+        if 'jwt_token' in event:
+            # Return simplified error response for Bedrock Agent Core
+            return {
                 'error': str(e),
                 'message': 'An error occurred while processing the request'
-            })
-        }
+            }
+        else:
+            # Return full error response for API Gateway/Lambda
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': str(e),
+                    'message': 'An error occurred while processing the request'
+                })
+            }

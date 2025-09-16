@@ -4,9 +4,10 @@ Test script for Strands Agent deployed on Amazon Bedrock Agent Core - Email Acti
 """
 
 import json
-import boto3
+import requests
 import time
-from botocore.exceptions import ClientError
+import urllib.parse
+import logging
 
 # Replace with your actual token
 <<<<<<< HEAD
@@ -23,16 +24,15 @@ AWS_REGION = "us-west-2"
 
 
 def test_email_activity_agentcore():
-    """Test email activity creation via Bedrock Agent Core (from test_mcp_simple.py)."""
+    """Test email activity creation via Bedrock Agent Core with JWT authentication."""
     print("=" * 80)
-    print("📧 BEDROCK AGENT CORE EMAIL ACTIVITY TEST")
+    print("📧 BEDROCK AGENT CORE EMAIL ACTIVITY TEST (JWT Authentication)")
     print("=" * 80)
     
-    try:
-        client = boto3.client('bedrock-agentcore', region_name=AWS_REGION)
-    except Exception as e:
-        print(f"❌ Failed to create Bedrock Agent Core client: {e}")
-        return
+    # Bedrock Agent Core HTTP endpoint (correct format)
+    # URL encode the agent ARN
+    escaped_agent_arn = urllib.parse.quote(AGENT_ARN, safe='')
+    endpoint_url = f"https://bedrock-agentcore.{AWS_REGION}.amazonaws.com/runtimes/{escaped_agent_arn}/invocations?qualifier=DEFAULT"
     
     # Email test case from test_mcp_simple.py
     test_case = {
@@ -81,6 +81,7 @@ Instructions:
     
     print(f"🤖 Agent ARN: {AGENT_ARN}")
     print(f"🌐 AWS Region: {AWS_REGION}")
+    print(f"🔗 Endpoint URL: {endpoint_url}")
     print(f"📧 Subject: {test_case['subject']}")
     print(f"📤 Sender: {test_case['sender_email']}")
     print(f"📅 Due Date: {test_case['due_date']}")
@@ -90,45 +91,49 @@ Instructions:
     try:
         start_time = time.time()
         
-        # Invoke the agent
-        response = client.invoke_agent_runtime(
-            agentRuntimeArn=AGENT_ARN,
-            payload=json.dumps(payload).encode('utf-8')
+        # Prepare headers with JWT authentication (based on sample)
+        headers = {
+            "Authorization": f"Bearer {AUTH_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Enable debug logging for detailed request/response info
+        logging.basicConfig(level=logging.INFO)
+        
+        # Make HTTP request to Bedrock Agent Core (using data instead of json)
+        response = requests.post(
+            endpoint_url,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=120  # 2 minute timeout
         )
         
         end_time = time.time()
         
         print(f"📊 Response received in {end_time - start_time:.2f} seconds")
         
-        # Debug the response structure
-        print(f"🔍 Response type: {type(response)}")
-        print(f"🔍 Response keys: {response.keys() if hasattr(response, 'keys') else 'No keys method'}")
+        # Check response status
+        print(f"🔍 HTTP Status Code: {response.status_code}")
+        print(f"🔍 Response Headers: {dict(response.headers)}")
         
-        # Process the response
-        if 'response' in response:
-            print(f"🔍 Response['response'] type: {type(response['response'])}")
+        if response.status_code == 200:
             try:
-                # Handle StreamingBody response
-                response_data = response['response']
-                if hasattr(response_data, 'read'):
-                    # It's a streaming body - read all data
-                    raw_data = response_data.read()
-                    if isinstance(raw_data, bytes):
-                        full_response = raw_data.decode('utf-8')
-                    else:
-                        full_response = str(raw_data)
-                elif isinstance(response_data, bytes):
-                    full_response = response_data.decode('utf-8')
+                # Parse JSON response
+                response_data = response.json()
+                print(f"🔍 Response JSON keys: {response_data.keys() if isinstance(response_data, dict) else 'Not a dict'}")
+                
+                # Extract the actual response body if it's in API Gateway format
+                if 'body' in response_data:
+                    actual_response = json.loads(response_data['body'])
                 else:
-                    # Fallback to string conversion
-                    full_response = str(response_data)
+                    actual_response = response_data
                     
-                print(f"🔍 Raw response length: {len(full_response)}")
-                print(f"🔍 Raw response preview: {full_response[:200]}...")
+                full_response = json.dumps(actual_response)
+                print(f"🔍 Parsed response length: {len(full_response)}")
                     
             except Exception as parse_error:
                 print(f"❌ Response parsing error: {parse_error}")
-                full_response = str(response['response'])
+                full_response = response.text
             
             if full_response:
                 try:
@@ -158,10 +163,10 @@ Instructions:
             else:
                 print("❌ No content in response")
         else:
-            print(f"❌ Unexpected response format: {response}")
+            print(f"❌ HTTP Error {response.status_code}: {response.text}")
             
-    except ClientError as e:
-        print(f"❌ AWS Client Error: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ HTTP Request Error: {e}")
     except Exception as e:
         print(f"❌ Exception: {e}")
 

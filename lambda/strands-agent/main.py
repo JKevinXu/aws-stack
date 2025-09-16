@@ -31,6 +31,15 @@ async def invoke_agent(request: Request):
             event = json.loads(body.decode('utf-8'))
         else:
             event = {}
+        
+        # Extract JWT token from Authorization header
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            jwt_token = auth_header[7:]  # Remove 'Bearer ' prefix
+            event['mcp_authorization_token'] = jwt_token
+            print(f"JWT token extracted from Authorization header")
+        else:
+            print("No JWT token found in Authorization header")
             
         # Call the Lambda handler with None context (not used)
         response = handler(event, None)
